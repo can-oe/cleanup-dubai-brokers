@@ -8,36 +8,6 @@ from urllib.parse import quote
 def clean_phone(num):
     return re.sub(r'\D', '', str(num)) if pd.notnull(num) else ''
 
-def custom_mobile_encode(msg):
-    # Emojis und "normale" Zeichen bleiben, nur Steuerzeichen werden encodiert (z.B. \n, Komma, etc.)
-    # Du kannst safe noch weiter anpassen, je nach Bedarf
-    return quote(msg, safe="😊😃🏡🏙️🇩🇪🇹🇷🇷🇺 -.,:/")
-
-# RAW WhatsApp messages (mit Emojis direkt)
-message_cine_raw = (
-    "Hi, this is Cinare from Danube Properties 😊\n\n"
-    "I hope you’re doing well.\n\n"
-    "Just wanted to quickly reach out and see if you’re currently working with Danube — or open to new opportunities?\n\n"
-    "Even if you already have a Danube contact, working with me could offer extra value — especially since I speak German 🇩🇪 and Turkish 🇹🇷, which can be a big advantage with European clients.\n\n"
-    "You can also check out all the latest projects on my personal website: https://www.cinarezamanli.com\n\n"
-    "So when can we schedule a quick call? 😊"
-)
-message_vero_raw = (
-    "Hey, this is Veronika from DAR Global – a luxury real estate developer.\n\n"
-    "Hope you’re doing well! Just wanted to check if you’re already working with us – or open to new opportunities?\n\n"
-    "You might know us from our villas in JGE 🏡 or the Trump Tower on SZR 🏙️\n\n"
-    "I speak German 🇩🇪, Russian 🇷🇺 and can support you with international clients 😃\n\n"
-    "So when can we schedule a quick briefing to close some deals? 😊"
-)
-
-# Desktop (Browser/PC): Komplett url-encoded
-message_cine_desktop = quote(message_cine_raw, safe="")
-message_vero_desktop = quote(message_vero_raw, safe="")
-
-# Mobile: Emojis als Unicode, Rest encodiert (kein %20 für Leerzeichen im Emoji)
-message_cine_mobile = custom_mobile_encode(message_cine_raw)
-message_vero_mobile = custom_mobile_encode(message_vero_raw)
-
 def process_dataframe(df, start_date, message_encoded, mobile_mode=False):
     DATE_COLUMN = "LICENSE_START_DATE"
     PHONE_COLUMN = "PHONE"
@@ -96,16 +66,41 @@ st.markdown(
 
 uploaded_file = st.file_uploader("Upload your brokers.csv", type=["csv"])
 
-message_choice = st.selectbox("Which message should be used?", ["Cine", "Vero"])
-mobile_mode = st.checkbox("Mobile-friendly version", value=False)
+# Plaintext WhatsApp messages (for encoding)
+message_cine_raw = """
+Hi, this is Cinare from Danube Properties 😊
 
-# Message selection
+I hope you’re doing well.
+
+Just wanted to quickly reach out and see if you’re currently working with Danube — or open to new opportunities?
+
+Even if you already have a Danube contact, working with me could offer extra value — especially since I speak German 🇩🇪 and Turkish 🇹🇷, which can be a big advantage with European clients.
+
+You can also check out all the latest projects on my personal website: https://www.cinarezamanli.com
+
+So when can we schedule a quick call? 😊
+"""
+message_vero_raw = """
+Hey, this is Veronika from DAR Global – a luxury real estate developer.
+
+Hope you’re doing well! Just wanted to check if you’re already working with us – or open to new opportunities?
+
+You might know us from our villas in JGE 🏡 or the Trump Tower on SZR 🏙️
+
+I speak German 🇩🇪, Russian 🇷🇺 and can support you with international clients 😃
+
+So when can we schedule a quick briefing to close some deals? 😊
+"""
+
+message_choice = st.selectbox("Which message should be used?", ["Cine", "Vero"])
 if message_choice == "Cine":
+    message_encoded = quote(message_cine_raw.strip())
     base_filename = "brokers-cleaned_cine"
-    message_encoded = message_cine_mobile if mobile_mode else message_cine_desktop
 else:
+    message_encoded = quote(message_vero_raw.strip())
     base_filename = "brokers-cleaned_vero"
-    message_encoded = message_vero_mobile if mobile_mode else message_vero_desktop
+
+mobile_mode = st.checkbox("Mobile-friendly version", value=False)
 
 if mobile_mode:
     default_filename = f"{base_filename}_mobile.xlsx"
