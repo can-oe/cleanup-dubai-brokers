@@ -86,12 +86,18 @@ message_vero_raw = (
 message_choice = st.selectbox("Which message should be used?", ["Cine", "Vero"])
 if message_choice == "Cine":
     message_encoded = quote(message_cine_raw, safe="")
-    default_filename = "brokers-cleaned_cine.xlsx"
+    base_filename = "brokers-cleaned_cine"
 else:
     message_encoded = quote(message_vero_raw, safe="")
-    default_filename = "brokers-cleaned_vero.xlsx"
+    base_filename = "brokers-cleaned_vero"
 
 mobile_mode = st.checkbox("Mobile-friendly version", value=False)
+
+# FILENAME logic
+if mobile_mode:
+    default_filename = f"{base_filename}_mobile.xlsx"
+else:
+    default_filename = f"{base_filename}.xlsx"
 
 start_date = st.date_input("Choose the start date", value=datetime.today())
 start_date = pd.to_datetime(start_date)
