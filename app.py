@@ -3,6 +3,7 @@ import pandas as pd
 import re
 from datetime import datetime
 from io import BytesIO
+from urllib.parse import unquote
 
 def clean_phone(num):
     return re.sub(r'\D', '', str(num)) if pd.notnull(num) else ''
@@ -23,10 +24,12 @@ def process_dataframe(df, start_date, message, mobile_mode=False):
     df = df.sort_values(DATE_COLUMN, ascending=False)
     df = df.drop(columns=[col for col in ['GENDER_EN', 'LICENSE_END_DATE', 'WEBPAGE', 'FAX', 'REAL_ESTATE_NUMBER'] if col in df.columns])
 
-    # WhatsApp Link: mobile (wa.me) or desktop (web.whatsapp.com)
+    # WhatsApp Link: mobile (whatsapp://send) or desktop (web.whatsapp.com)
     if mobile_mode:
+        # decode message so emojis show up on the phone
+        message_plain = unquote(message)
         whatsapp_urls = (
-            "https://wa.me/" + df[PHONE_COLUMN] + "?text=" + message
+            "https://wa.me/" + df[PHONE_COLUMN] + "?text=" + message_plain
         )
     else:
         whatsapp_urls = (
@@ -113,7 +116,6 @@ if uploaded_file is not None:
                 max_len = max([len(column)] + [len(v) for v in values]) + 2
                 worksheet.set_column(i, i, max_len)
         whatsapp_col = df_result.columns.get_loc("WHATSAPP")
-        # Mobile: Make the Excel cell an actual clickable link, regardless of mobile or desktop
         for row_num, url in enumerate(df_result["WHATSAPP"], start=1):
             worksheet.write_url(row_num, whatsapp_col, url, string="Send WhatsApp")
     output.seek(0)
