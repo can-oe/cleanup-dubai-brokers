@@ -3,12 +3,12 @@ import pandas as pd
 import re
 from datetime import datetime
 from io import BytesIO
-from urllib.parse import unquote
+from urllib.parse import quote
 
 def clean_phone(num):
     return re.sub(r'\D', '', str(num)) if pd.notnull(num) else ''
 
-def process_dataframe(df, start_date, message, mobile_mode=False):
+def process_dataframe(df, start_date, message_encoded, mobile_mode=False):
     DATE_COLUMN = "LICENSE_START_DATE"
     PHONE_COLUMN = "PHONE"
 
@@ -24,16 +24,14 @@ def process_dataframe(df, start_date, message, mobile_mode=False):
     df = df.sort_values(DATE_COLUMN, ascending=False)
     df = df.drop(columns=[col for col in ['GENDER_EN', 'LICENSE_END_DATE', 'WEBPAGE', 'FAX', 'REAL_ESTATE_NUMBER'] if col in df.columns])
 
-    # WhatsApp Link: mobile (whatsapp://send) or desktop (web.whatsapp.com)
+    # WhatsApp Link: mobile (wa.me) or desktop (web.whatsapp.com)
     if mobile_mode:
-        # decode message so emojis show up on the phone
-        message_plain = unquote(message)
         whatsapp_urls = (
-            "https://wa.me/" + df[PHONE_COLUMN] + "?text=" + message_plain
+            "https://wa.me/" + df[PHONE_COLUMN] + "?text=" + message_encoded
         )
     else:
         whatsapp_urls = (
-            "https://web.whatsapp.com/send?phone=" + df[PHONE_COLUMN] + "&text=" + message
+            "https://web.whatsapp.com/send?phone=" + df[PHONE_COLUMN] + "&text=" + message_encoded
         )
     df["WHATSAPP"] = whatsapp_urls
 
@@ -68,28 +66,29 @@ st.markdown(
 
 uploaded_file = st.file_uploader("Upload your brokers.csv", type=["csv"])
 
-message_cine = (
-    "Hi%2C+this+is+Cinare+from+Danube+Properties+%F0%9F%98%8A%0A%0A"
-    "I+hope+you%E2%80%99re+doing+well.%0A%0A"
-    "Just+wanted+to+quickly+reach+out+and+see+if+you%E2%80%99re+currently+working+with+Danube+%E2%80%94+or+open+to+new+opportunities%3F%0A%0A"
-    "Even+if+you+already+have+a+Danube+contact%2C+working+with+me+could+offer+extra+value+%E2%80%94+especially+since+I+speak+German+%F0%9F%87%A9%F0%9F%87%AA+and+Turkish+%F0%9F%87%B9%F0%9F%87%B7%2C+which+can+be+a+big+advantage+with+European+clients.%0A%0A"
-    "You+can+also+check+out+all+the+latest+projects+on+my+personal+website%3A+https%3A%2F%2Fwww.cinarezamanli.com%0A%0A"
-    "So+when+can+we+schedule+a+quick+call%3F+%F0%9F%98%8A"
+# RAW WhatsApp messages (with emojis, newlines, etc.)
+message_cine_raw = (
+    "Hi, this is Cinare from Danube Properties 😊\n\n"
+    "I hope you’re doing well.\n\n"
+    "Just wanted to quickly reach out and see if you’re currently working with Danube — or open to new opportunities?\n\n"
+    "Even if you already have a Danube contact, working with me could offer extra value — especially since I speak German 🇩🇪 and Turkish 🇹🇷, which can be a big advantage with European clients.\n\n"
+    "You can also check out all the latest projects on my personal website: https://www.cinarezamanli.com\n\n"
+    "So when can we schedule a quick call? 😊"
 )
-message_vero = (
-    "Hey%2C+this+is+Veronika+from+DAR+Global+%E2%80%93+a+luxury+real+estate+developer.%0A%0A"
-    "Hope+you%E2%80%99re+doing+well%21%0AJust+wanted+to+check+if+you%E2%80%99re+already+working+with+us+%E2%80%93+or+open+to+new+opportunities%3F%0A%0A"
-    "You+might+know+us+from+our+villas+in+JGE+%F0%9F%8F%A1+or+the+Trump+Tower+on+SZR+%F0%9F%8F%99%EF%B8%8F%0A%0A"
-    "I+speak+German+%F0%9F%87%A9%F0%9F%87%AA+Russian+%F0%9F%87%B7%F0%9F%87%BA+and+can+support+you+with+international+clients+%F0%9F%98%83%0A%0A"
-    "So+when+can+we+schedule+a+quick+briefing+to+close+some+deals%3F%F0%9F%98%8A"
+message_vero_raw = (
+    "Hey, this is Veronika from DAR Global – a luxury real estate developer.\n\n"
+    "Hope you’re doing well! Just wanted to check if you’re already working with us – or open to new opportunities?\n\n"
+    "You might know us from our villas in JGE 🏡 or the Trump Tower on SZR 🏙️\n\n"
+    "I speak German 🇩🇪, Russian 🇷🇺 and can support you with international clients 😃\n\n"
+    "So when can we schedule a quick briefing to close some deals? 😊"
 )
 
 message_choice = st.selectbox("Which message should be used?", ["Cine", "Vero"])
 if message_choice == "Cine":
-    message = message_cine
+    message_encoded = quote(message_cine_raw, safe="")
     default_filename = "brokers-cleaned_cine.xlsx"
 else:
-    message = message_vero
+    message_encoded = quote(message_vero_raw, safe="")
     default_filename = "brokers-cleaned_vero.xlsx"
 
 mobile_mode = st.checkbox("Mobile-friendly version", value=False)
@@ -99,7 +98,7 @@ start_date = pd.to_datetime(start_date)
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
-    df_result = process_dataframe(df, start_date, message, mobile_mode)
+    df_result = process_dataframe(df, start_date, message_encoded, mobile_mode)
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_result.to_excel(writer, index=False, sheet_name='BROKERS')
