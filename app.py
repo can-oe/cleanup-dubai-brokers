@@ -7,9 +7,10 @@ from io import BytesIO
 def clean_phone(num):
     return re.sub(r'\D', '', str(num)) if pd.notnull(num) else ''
 
-def process_dataframe(df, start_date, message):
+def process_dataframe(df, start_date, message, mobile_mode=False):
     DATE_COLUMN = "LICENSE_START_DATE"
     PHONE_COLUMN = "PHONE"
+
     df[DATE_COLUMN] = pd.to_datetime(df[DATE_COLUMN], errors='coerce')
     df = df[df[DATE_COLUMN] >= start_date].copy()
     df[PHONE_COLUMN] = df[PHONE_COLUMN].apply(clean_phone)
@@ -21,19 +22,33 @@ def process_dataframe(df, start_date, message):
     df = df[df[PHONE_COLUMN].str.len() == 12]
     df = df.sort_values(DATE_COLUMN, ascending=False)
     df = df.drop(columns=[col for col in ['GENDER_EN', 'LICENSE_END_DATE', 'WEBPAGE', 'FAX', 'REAL_ESTATE_NUMBER'] if col in df.columns])
-    whatsapp_urls = (
-        "https://web.whatsapp.com/send?phone="
-        + df[PHONE_COLUMN]
-        + "&text=" + message
-    )
+
+    # WhatsApp Link: mobile (wa.me) or desktop (web.whatsapp.com)
+    if mobile_mode:
+        whatsapp_urls = (
+            "https://wa.me/" + df[PHONE_COLUMN] + "?text=" + message
+        )
+    else:
+        whatsapp_urls = (
+            "https://web.whatsapp.com/send?phone=" + df[PHONE_COLUMN] + "&text=" + message
+        )
     df["WHATSAPP"] = whatsapp_urls
-    columns = [col for col in df.columns if col != "WHATSAPP"] + ["WHATSAPP"]
-    df = df[columns]
+
+    # For mobile: only show minimal columns
+    if mobile_mode:
+        possible_broker_cols = [col for col in df.columns if "BROKER" in col.upper() or "NAME" in col.upper()]
+        broker_col = possible_broker_cols[0] if possible_broker_cols else None
+        selected_cols = [col for col in [broker_col, DATE_COLUMN, PHONE_COLUMN, "WHATSAPP"] if col in df.columns]
+        df = df[selected_cols]
+    else:
+        # Move WhatsApp to end
+        columns = [col for col in df.columns if col != "WHATSAPP"] + ["WHATSAPP"]
+        df = df[columns]
     return df
 
 st.set_page_config(
     page_title="Dubai Brokers Cleanup",
-    page_icon="🏙️",  # z.B. ein Emoji als Icon
+    page_icon="🏙️",
     layout="centered"
 )
 
@@ -47,7 +62,6 @@ st.markdown(
     :point_right: After opening the page, please click on the **'Broker'** tab to download the correct file.
     """
 )
-
 
 uploaded_file = st.file_uploader("Upload your brokers.csv", type=["csv"])
 
@@ -75,12 +89,14 @@ else:
     message = message_vero
     default_filename = "brokers-cleaned_vero.xlsx"
 
+mobile_mode = st.checkbox("Mobile-friendly version", value=False)
+
 start_date = st.date_input("Choose the start date", value=datetime.today())
 start_date = pd.to_datetime(start_date)
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
-    df_result = process_dataframe(df, start_date, message)
+    df_result = process_dataframe(df, start_date, message, mobile_mode)
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_result.to_excel(writer, index=False, sheet_name='BROKERS')
@@ -97,6 +113,7 @@ if uploaded_file is not None:
                 max_len = max([len(column)] + [len(v) for v in values]) + 2
                 worksheet.set_column(i, i, max_len)
         whatsapp_col = df_result.columns.get_loc("WHATSAPP")
+        # Mobile: Make the Excel cell an actual clickable link, regardless of mobile or desktop
         for row_num, url in enumerate(df_result["WHATSAPP"], start=1):
             worksheet.write_url(row_num, whatsapp_col, url, string="Send WhatsApp")
     output.seek(0)
