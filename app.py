@@ -10,7 +10,6 @@ def clean_phone(num):
 def process_dataframe(df, start_date, message):
     DATE_COLUMN = "LICENSE_START_DATE"
     PHONE_COLUMN = "PHONE"
-    # Nach Datum filtern
     df[DATE_COLUMN] = pd.to_datetime(df[DATE_COLUMN], errors='coerce')
     df = df[df[DATE_COLUMN] >= start_date].copy()
     df[PHONE_COLUMN] = df[PHONE_COLUMN].apply(clean_phone)
@@ -28,14 +27,29 @@ def process_dataframe(df, start_date, message):
         + "&text=" + message
     )
     df["WHATSAPP"] = whatsapp_urls
-    # Optional: WhatsApp-Spalte ganz ans Ende schieben (falls Reihenfolge geändert)
     columns = [col for col in df.columns if col != "WHATSAPP"] + ["WHATSAPP"]
     df = df[columns]
     return df
 
-st.title("Broker-Nummern-Bereiniger & WhatsApp-Link-Generator")
+st.set_page_config(
+    page_title="Dubai Brokers Cleanup",
+    page_icon="🏙️",  # z.B. ein Emoji als Icon
+    layout="centered"
+)
 
-uploaded_file = st.file_uploader("Lade deine brokers.csv hoch", type=["csv"])
+st.title("Dubai Brokers CSV Cleanup")
+
+st.markdown(
+    """
+    **You can download the latest brokers.csv here:**
+    [Dubai Land Department – Real Estate Data](https://dubailand.gov.ae/en/open-data/real-estate-data/)
+
+    :point_right: After opening the page, please click on the **'Broker'** tab to download the correct file.
+    """
+)
+
+
+uploaded_file = st.file_uploader("Upload your brokers.csv", type=["csv"])
 
 message_cine = (
     "Hi%2C+this+is+Cinare+from+Danube+Properties+%F0%9F%98%8A%0A%0A"
@@ -53,32 +67,28 @@ message_vero = (
     "So+when+can+we+schedule+a+quick+briefing+to+close+some+deals%3F%F0%9F%98%8A"
 )
 
-message_choice = st.selectbox("Welche Nachricht soll verwendet werden?", ["Cine", "Vero"])
+message_choice = st.selectbox("Which message should be used?", ["Cine", "Vero"])
 if message_choice == "Cine":
     message = message_cine
-    default_filename = "brokers-bereinigt_cine.xlsx"
+    default_filename = "brokers-cleaned_cine.xlsx"
 else:
     message = message_vero
-    default_filename = "brokers-bereinigt_vero.xlsx"
+    default_filename = "brokers-cleaned_vero.xlsx"
 
-start_date = st.date_input("Startdatum auswählen", value=datetime.today())
-# WICHTIG: Datum umwandeln für pandas-Vergleich!
+start_date = st.date_input("Choose the start date", value=datetime.today())
 start_date = pd.to_datetime(start_date)
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     df_result = process_dataframe(df, start_date, message)
-    # Excel erzeugen mit Hyperlinks
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df_result.to_excel(writer, index=False, sheet_name='Brokers')
+        df_result.to_excel(writer, index=False, sheet_name='BROKERS')
         workbook = writer.book
-        worksheet = writer.sheets['Brokers']
-        # Header fett & CAPS
+        worksheet = writer.sheets['BROKERS']
         header_format = workbook.add_format({'bold': True})
         for col_num, value in enumerate(df_result.columns):
             worksheet.write(0, col_num, value.upper(), header_format)
-        # Spaltenbreiten (WHATSAPP fest, Rest auto)
         for i, column in enumerate(df_result.columns):
             if column == "WHATSAPP":
                 worksheet.set_column(i, i, 20)
@@ -86,14 +96,13 @@ if uploaded_file is not None:
                 values = df_result[column].dropna().astype(str)
                 max_len = max([len(column)] + [len(v) for v in values]) + 2
                 worksheet.set_column(i, i, max_len)
-        # WhatsApp-Links als Hyperlink setzen
         whatsapp_col = df_result.columns.get_loc("WHATSAPP")
         for row_num, url in enumerate(df_result["WHATSAPP"], start=1):
-            worksheet.write_url(row_num, whatsapp_col, url, string="WhatsApp senden")
+            worksheet.write_url(row_num, whatsapp_col, url, string="Send WhatsApp")
     output.seek(0)
-    st.success("Fertig! Du kannst die Excel jetzt herunterladen:")
+    st.success("Done! Download your Excel file below:")
     st.download_button(
-        label="Bereinigte Excel herunterladen",
+        label="Download cleaned Excel",
         data=output,
         file_name=default_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

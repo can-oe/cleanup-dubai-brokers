@@ -7,47 +7,47 @@ DATE_COLUMN = "LICENSE_START_DATE"
 PHONE_COLUMN = "PHONE"
 
 def clean_phone(num):
-    return re.sub(r'\D', '', str(num))  # Sonderzeichen entfernen
+    return re.sub(r'\D', '', str(num))  # remove non-digit characters
 
 def main():
-    # Zeitraum eingeben
-    start_date = input("Bitte Startdatum angeben (YYYY-MM-DD): ")
+    # select start date
+    start_date = input("Enter the start date (YYYY-MM-DD): ")
     try:
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
     except ValueError:
-        print("Ungültiges Datum!")
+        print("Invalid date!")
         return
 
-    # CSV einlesen
+    # read CSV
     df = pd.read_csv(INPUT_CSV)
 
-    # Nach Datum filtern
+    # filter by start date
     df[DATE_COLUMN] = pd.to_datetime(df[DATE_COLUMN], errors='coerce')
     df = df[df[DATE_COLUMN] >= start_dt].copy()
 
-    # 1. Sonderzeichen entfernen
+    # 1. remove non-digit characters from phone numbers
     df[PHONE_COLUMN] = df[PHONE_COLUMN].apply(clean_phone)
 
-    # 2. Leere Nummern entfernen
+    # 2. remove empty phone numbers
     df = df[df[PHONE_COLUMN].str.strip() != '']
 
-    # 3. Nur Nummern, die mit 9710, 9715, 5 oder 05 beginnen
+    # 3. only keep numbers starting with 9710, 9715, 5, or 05
     pattern = r'^(9710|9715|5|05)'
     df = df[df[PHONE_COLUMN].str.match(pattern)]
 
-    # 4. Füge '971' am Anfang hinzu, wenn nicht vorhanden
+    # 4. add '971' prefix if missing
     df[PHONE_COLUMN] = df[PHONE_COLUMN].apply(lambda num: num if num.startswith('971') else '971' + num)
 
     # 5. '97105' → '9715'
     df[PHONE_COLUMN] = df[PHONE_COLUMN].apply(lambda num: num.replace('97105', '9715', 1) if num.startswith('97105') else num)
 
-    # 6. Nur 12-stellige Nummern behalten
+    # 6. only keep phone numbers with 12 digits
     df = df[df[PHONE_COLUMN].str.len() == 12]
 
-    # 7. Sortieren
+    # 7. sort by start date
     df = df.sort_values(DATE_COLUMN, ascending=False)
 
-    # 8. Unnötige Spalten löschen
+    # 8. remove unnecessary columns
     df = df.drop(columns=[col for col in ['GENDER_EN', 'LICENSE_END_DATE', 'WEBPAGE', 'FAX', 'REAL_ESTATE_NUMBER'] if col in df.columns])
 
     # 9. WhatsApp-Messages
@@ -67,16 +67,16 @@ def main():
         "So+when+can+we+schedule+a+quick+briefing+to+close+some+deals%3F%F0%9F%98%8A"
     )
 
-    print("Welche Message soll verwendet werden?")
+    print("Which message should be used?")
     print("1. Cine")
     print("2. Vero")
-    wahl = input("Bitte 1 oder 2 eingeben: ").strip()
-    if wahl == '1':
+    choice = input("Please select 1 or 2: ").strip()
+    if choice == '1':
         message = message_cine
-        OUTPUT_EXCEL = "brokers-bereinigt_cine.xlsx"
+        OUTPUT_EXCEL = "brokers-cleaned_cine.xlsx"
     else:
         message = message_vero
-        OUTPUT_EXCEL = "brokers-bereinigt_vero.xlsx"
+        OUTPUT_EXCEL = "brokers-cleaned_vero.xlsx"
 
     whatsapp_urls = (
         "https://web.whatsapp.com/send?phone="
@@ -84,34 +84,34 @@ def main():
         + "&text=" + message
     )
 
-    # WhatsApp-Spalte einfügen
+    # add WhatsApp column
     df["WHATSAPP"] = whatsapp_urls
 
-    # --- Excel mit Formatierung ---
+    # format excel output
     with pd.ExcelWriter(OUTPUT_EXCEL, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Brokers')
+        df.to_excel(writer, index=False, sheet_name='BROKERS')
         workbook = writer.book
-        worksheet = writer.sheets['Brokers']
+        worksheet = writer.sheets['BROKERS']
 
-        # Überschriften fett und in CAPS
+        # write header in bold
         header_format = workbook.add_format({'bold': True})
         for col_num, value in enumerate(df.columns):
             worksheet.write(0, col_num, value.upper(), header_format)
 
-        # Spaltenbreite automatisch anpassen
+        # adjust column widths
         for i, column in enumerate(df.columns):
             if column == "WHATSAPP":
-                worksheet.set_column(i, i, 20)  # Breite für WhatsApp-Spalte
+                worksheet.set_column(i, i, 20)  # wide for WhatsApp
             else:
                 max_len = max([len(str(s)) for s in df[column].values] + [len(column)]) + 2
                 worksheet.set_column(i, i, max_len)
 
-        # WhatsApp-Link als Hyperlink setzen
+        # set WhatsApp links as clickable URLs
         whatsapp_col = df.columns.get_loc("WHATSAPP")
         for row_num, url in enumerate(df["WHATSAPP"], start=1):
-            worksheet.write_url(row_num, whatsapp_col, url, string="WhatsApp senden")
+            worksheet.write_url(row_num, whatsapp_col, url, string="Send WhatsApp")
 
-    print(f"Bereinigte Datei gespeichert als: {OUTPUT_EXCEL}")
+    print(f"Cleaned file saved as: {OUTPUT_EXCEL}")
 
 if __name__ == "__main__":
     main()
